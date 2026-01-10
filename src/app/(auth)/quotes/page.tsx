@@ -36,14 +36,14 @@ function QuotesContent() {
 
   // Local filter state
   const [searchQuery, setSearchQuery] = useState('')
-  const [localStatusFilter, setLocalStatusFilter] = useState<string>(statusFilter || '')
+  const [localStatusFilter, setLocalStatusFilter] = useState<string>(statusFilter || 'all')
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
     try {
       const result = await getQuotes({
         search: searchQuery || undefined,
-        status: localStatusFilter as import('@/types').QuoteStatus || undefined,
+        status: localStatusFilter === 'all' ? undefined : localStatusFilter as import('@/types').QuoteStatus,
         customer_id: customerId || undefined,
       })
 
@@ -132,7 +132,7 @@ function QuotesContent() {
             <SelectValue placeholder="所有狀態" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">所有狀態</SelectItem>
+            <SelectItem value="all">所有狀態</SelectItem>
             {QUOTE_STATUSES.map((status) => (
               <SelectItem key={status.value} value={status.value}>
                 {status.label}
