@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Save, Plus, Trash2, Search } from 'lucide-react'
+import { ArrowLeft, Save, Plus, Trash2, Search, Cloud } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -36,6 +36,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { getQuote, updateQuote } from '@/actions/quotes'
 import { getProducts } from '@/actions/products'
+import { getCloudProductSettings, searchCloudProducts, type CloudProduct } from '@/actions/cloud-products'
 import { CURRENCIES, DEFAULT_TAX_RATE } from '@/config/constants'
 import type { QuoteWithRelations, Product, QuoteItemFormData, Currency } from '@/types'
 
@@ -67,6 +68,11 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
   const [isSaving, setIsSaving] = useState(false)
   const [showProductDialog, setShowProductDialog] = useState(false)
   const [productSearch, setProductSearch] = useState('')
+  const [cloudSheetUrl, setCloudSheetUrl] = useState<string | null>(null)
+  const [cloudProducts, setCloudProducts] = useState<CloudProduct[]>([])
+  const [cloudSearchQuery, setCloudSearchQuery] = useState('')
+  const [isSearchingCloud, setIsSearchingCloud] = useState(false)
+  const [showCloudDialog, setShowCloudDialog] = useState(false)
 
   const {
     register,
@@ -90,10 +96,15 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true)
-      const [quoteResult, productsResult] = await Promise.all([
+      const [quoteResult, productsResult, cloudSettingsResult] = await Promise.all([
         getQuote(resolvedParams.id),
         getProducts(),
+        getCloudProductSettings(),
       ])
+
+      if (cloudSettingsResult.data?.google_sheet_url) {
+        setCloudSheetUrl(cloudSettingsResult.data.google_sheet_url)
+      }
 
       if (quoteResult.data) {
         setQuote(quoteResult.data)
@@ -162,6 +173,35 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
     setItems([...items, newItem])
     setShowProductDialog(false)
     setProductSearch('')
+  }
+
+  const handleSearchCloudProducts = async (query: string) => {
+    setCloudSearchQuery(query)
+    if (!cloudSheetUrl || query.length < 1) {
+      setCloudProducts([])
+      return
+    }
+    setIsSearchingCloud(true)
+    const { data } = await searchCloudProducts(cloudSheetUrl, query)
+    if (data) setCloudProducts(data)
+    setIsSearchingCloud(false)
+  }
+
+  const handleAddCloudProduct = (product: CloudProduct) => {
+    const newItem: QuoteItem = {
+      product_id: null,
+      product_name: product.name,
+      product_sku: product.sku,
+      product_description: product.description || '',
+      quantity: 1,
+      unit: product.unit || '件',
+      unit_price: product.unit_price,
+      original_price: product.unit_price,
+    }
+    setItems([...items, newItem])
+    setShowCloudDialog(false)
+    setCloudSearchQuery('')
+    setCloudProducts([])
   }
 
   const handleRemoveItem = (index: number) => {
@@ -244,10 +284,18 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>報價項目</CardTitle>
-                <Button type="button" onClick={() => setShowProductDialog(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  新增產品
-                </Button>
+                <div className="flex gap-2">
+                  <Button type="button" onClick={() => setShowProductDialog(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    新增產品
+                  </Button>
+                  {cloudSheetUrl && (
+                    <Button type="button" variant="secondary" onClick={() => setShowCloudDialog(true)}>
+                      <Cloud className="mr-2 h-4 w-4" />
+                      雲端搜尋
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {items.length === 0 ? (
@@ -504,6 +552,56 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
                         <div className="text-sm text-muted-foreground">
                           {product.sku} · {getCurrencySymbol()}
                           {product.base_price.toLocaleString()}
+                        </div>
+                      </div>
+                      <Button type="button" size="sm">
+                        新增
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cloud Product Dialog */}
+      <Dialog open={showCloudDialog} onOpenChange={setShowCloudDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>雲端產品搜尋</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="輸入貨號或品名搜尋..."
+                value={cloudSearchQuery}
+                onChange={(e) => handleSearchCloudProducts(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="max-h-[400px] overflow-y-auto">
+              {isSearchingCloud ? (
+                <div className="text-center py-8 text-muted-foreground">搜尋中...</div>
+              ) : cloudProducts.length === 0 && cloudSearchQuery ? (
+                <div className="text-center py-8 text-muted-foreground">找不到產品</div>
+              ) : cloudProducts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">輸入關鍵字開始搜尋</div>
+              ) : (
+                <div className="space-y-2">
+                  {cloudProducts.map((product, index) => (
+                    <div
+                      key={`${product.sku}-${index}`}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted cursor-pointer"
+                      onClick={() => handleAddCloudProduct(product)}
+                    >
+                      <div>
+                        <div className="font-medium">{product.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {product.sku} · {getCurrencySymbol()}
+                          {product.unit_price.toLocaleString()}
                         </div>
                       </div>
                       <Button type="button" size="sm">
