@@ -39,8 +39,8 @@ export default function ProductsPage() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<string>('')
-  const [activeFilter, setActiveFilter] = useState<string>('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [activeFilter, setActiveFilter] = useState<string>('all')
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
@@ -48,8 +48,8 @@ export default function ProductsPage() {
       const [productsResult, categoriesResult] = await Promise.all([
         getProducts({
           search: searchQuery || undefined,
-          category_id: categoryFilter || undefined,
-          is_active: activeFilter === '' ? undefined : activeFilter === 'true',
+          category_id: categoryFilter === 'all' ? undefined : categoryFilter,
+          is_active: activeFilter === 'all' ? undefined : activeFilter === 'true',
         }),
         getProductCategories(),
       ])
@@ -160,7 +160,7 @@ export default function ProductsPage() {
             <SelectValue placeholder="所有分類" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">所有分類</SelectItem>
+            <SelectItem value="all">所有分類</SelectItem>
             {categories.map((category) => (
               <SelectItem key={category.id} value={category.id}>
                 {category.name}
@@ -173,7 +173,7 @@ export default function ProductsPage() {
             <SelectValue placeholder="所有狀態" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">所有狀態</SelectItem>
+            <SelectItem value="all">所有狀態</SelectItem>
             <SelectItem value="true">上架中</SelectItem>
             <SelectItem value="false">已下架</SelectItem>
           </SelectContent>

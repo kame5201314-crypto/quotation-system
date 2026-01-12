@@ -39,14 +39,14 @@ export default function CustomersPage() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
-  const [levelFilter, setLevelFilter] = useState<string>('')
+  const [levelFilter, setLevelFilter] = useState<string>('all')
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
     try {
       const result = await getCustomers({
         search: searchQuery || undefined,
-        customer_level: levelFilter as 'vip' | 'normal' | 'new' | undefined,
+        customer_level: levelFilter === 'all' ? undefined : levelFilter as 'vip' | 'normal' | 'new',
       })
 
       if (result.error) {
@@ -145,7 +145,7 @@ export default function CustomersPage() {
             <SelectValue placeholder="所有等級" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">所有等級</SelectItem>
+            <SelectItem value="all">所有等級</SelectItem>
             {CUSTOMER_LEVELS.map((level) => (
               <SelectItem key={level.value} value={level.value}>
                 {level.label}
