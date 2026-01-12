@@ -11,6 +11,7 @@ import {
   Star,
   Check,
   ShieldCheck,
+  Cloud,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -68,6 +69,7 @@ import {
   type ApprovalSettingFormData,
 } from '@/actions/settings'
 import { CURRENCIES } from '@/config/constants'
+import { CloudProductsCard } from '@/components/settings'
 
 const APPROVER_ROLES = [
   { value: 'manager', label: '主管' },
@@ -380,6 +382,10 @@ export default function SettingsPage() {
           <TabsTrigger value="approvals">
             <ShieldCheck className="h-4 w-4 mr-2" />
             審批規則
+          </TabsTrigger>
+          <TabsTrigger value="cloud">
+            <Cloud className="h-4 w-4 mr-2" />
+            雲端產品
           </TabsTrigger>
         </TabsList>
 
@@ -720,6 +726,11 @@ export default function SettingsPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Cloud Products Tab */}
+        <TabsContent value="cloud">
+          <CloudProductsCard />
         </TabsContent>
       </Tabs>
 

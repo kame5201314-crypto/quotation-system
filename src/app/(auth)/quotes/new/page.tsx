@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Plus, Trash2, Search } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Search, Cloud } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +42,7 @@ import { toast } from 'sonner'
 import { getCustomers } from '@/actions/customers'
 import { getProducts } from '@/actions/products'
 import { createQuote } from '@/actions/quotes'
+import { getCloudProductSettings, searchCloudProducts, type CloudProduct } from '@/actions/cloud-products'
 import { CURRENCIES, DEFAULT_TAX_RATE, PRODUCT_UNITS } from '@/config/constants'
 import type { Customer, Product, QuoteFormData, QuoteItemFormData } from '@/types'
 
@@ -54,8 +55,13 @@ export default function NewQuotePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [cloudProducts, setCloudProducts] = useState<CloudProduct[]>([])
+  const [cloudSheetUrl, setCloudSheetUrl] = useState<string | null>(null)
+  const [cloudSearchQuery, setCloudSearchQuery] = useState('')
+  const [isSearchingCloud, setIsSearchingCloud] = useState(false)
   const [isCustomerOpen, setIsCustomerOpen] = useState(false)
   const [isProductOpen, setIsProductOpen] = useState(false)
+  const [isCloudProductOpen, setIsCloudProductOpen] = useState(false)
 
   // Form state
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -72,13 +78,17 @@ export default function NewQuotePage() {
   // Load initial data
   useEffect(() => {
     const loadData = async () => {
-      const [customersResult, productsResult] = await Promise.all([
+      const [customersResult, productsResult, cloudSettingsResult] = await Promise.all([
         getCustomers(),
         getProducts({ is_active: true }),
+        getCloudProductSettings(),
       ])
 
       if (customersResult.data) setCustomers(customersResult.data)
       if (productsResult.data) setProducts(productsResult.data)
+      if (cloudSettingsResult.data?.google_sheet_url) {
+        setCloudSheetUrl(cloudSettingsResult.data.google_sheet_url)
+      }
 
       // Set default valid_until to 30 days from now
       const defaultDate = new Date()
@@ -87,6 +97,39 @@ export default function NewQuotePage() {
     }
     loadData()
   }, [])
+
+  // Search cloud products
+  const handleSearchCloudProducts = async (query: string) => {
+    setCloudSearchQuery(query)
+    if (!cloudSheetUrl || query.length < 1) {
+      setCloudProducts([])
+      return
+    }
+
+    setIsSearchingCloud(true)
+    const { data } = await searchCloudProducts(cloudSheetUrl, query)
+    if (data) setCloudProducts(data)
+    setIsSearchingCloud(false)
+  }
+
+  // Add cloud product to quote items
+  const handleAddCloudProduct = (product: CloudProduct) => {
+    const newItem: QuoteItem = {
+      id: crypto.randomUUID(),
+      product_id: null,
+      product_name: product.name,
+      product_sku: product.sku,
+      product_description: product.description || '',
+      quantity: 1,
+      unit: product.unit || '件',
+      unit_price: product.unit_price,
+      original_price: product.unit_price,
+    }
+    setItems([...items, newItem])
+    setIsCloudProductOpen(false)
+    setCloudSearchQuery('')
+    setCloudProducts([])
+  }
 
   // Add product to quote items
   const handleAddProduct = (product: Product) => {
@@ -332,6 +375,51 @@ export default function NewQuotePage() {
                     </Command>
                   </PopoverContent>
                 </Popover>
+                {cloudSheetUrl && (
+                  <Popover open={isCloudProductOpen} onOpenChange={setIsCloudProductOpen}>
+                    <PopoverTrigger asChild>
+                      <Button size="sm" variant="secondary">
+                        <Cloud className="mr-2 h-4 w-4" />
+                        雲端搜尋
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0" align="end">
+                      <Command shouldFilter={false}>
+                        <CommandInput
+                          placeholder="輸入貨號搜尋..."
+                          value={cloudSearchQuery}
+                          onValueChange={handleSearchCloudProducts}
+                        />
+                        <CommandList>
+                          {isSearchingCloud ? (
+                            <div className="py-6 text-center text-sm text-muted-foreground">
+                              搜尋中...
+                            </div>
+                          ) : cloudProducts.length === 0 && cloudSearchQuery ? (
+                            <CommandEmpty>找不到產品</CommandEmpty>
+                          ) : (
+                            <CommandGroup>
+                              {cloudProducts.map((product, index) => (
+                                <CommandItem
+                                  key={`${product.sku}-${index}`}
+                                  value={product.sku}
+                                  onSelect={() => handleAddCloudProduct(product)}
+                                >
+                                  <div className="flex-1">
+                                    <div className="font-medium">{product.name}</div>
+                                    <div className="text-sm text-muted-foreground">
+                                      {product.sku} · {formatCurrency(product.unit_price)}
+                                    </div>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                )}
                 <Button size="sm" variant="outline" onClick={handleAddEmptyItem}>
                   <Plus className="mr-2 h-4 w-4" />
                   自訂項目
